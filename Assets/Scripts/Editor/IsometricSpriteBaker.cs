@@ -47,6 +47,8 @@ namespace IsometricTool.Editor
             GetWindow<IsometricSpriteBaker>("Isometric Sprite Baker");
         }
 
+        public bool bakeAllDirections = true;
+
         private void OnGUI()
         {
             GUILayout.Label("Isometric 8-Direction Sprite Baker", EditorStyles.boldLabel);
@@ -56,8 +58,12 @@ namespace IsometricTool.Editor
             isoCamera = (Camera)EditorGUILayout.ObjectField("Isometric Camera", isoCamera, typeof(Camera), true);
             animationClip = (AnimationClip)EditorGUILayout.ObjectField("Animation Clip", animationClip, typeof(AnimationClip), false);
 
-            framesPerDirection = EditorGUILayout.IntSlider("Frames per Direction", framesPerDirection, 4, 32);
-            textureResolution = EditorGUILayout.IntPopup("Resolution", textureResolution, new[] { "128", "256", "512" }, new[] { 128, 256, 512 });
+            framesPerDirection = EditorGUILayout.IntSlider("Frames per Direction", framesPerDirection, 4, 60);
+            textureResolution = EditorGUILayout.IntPopup("Resolution", textureResolution, 
+                new[] { "128 x 128 (Mobile / Minions)", "256 x 256 (Standard In-game)", "512 x 512 (Boss / High-res)", "1024 x 1024 (Character Select / Close-up)", "2048 x 2048 (Ultra HQ)" }, 
+                new[] { 128, 256, 512, 1024, 2048 });
+
+            bakeAllDirections = EditorGUILayout.Toggle("Bake All 8 Directions", bakeAllDirections);
             outputDirectory = EditorGUILayout.TextField("Output Folder", outputDirectory);
             generateSpriteSheet = EditorGUILayout.Toggle("Generate Sprite Sheet", generateSpriteSheet);
 
@@ -70,12 +76,12 @@ namespace IsometricTool.Editor
                     EditorUtility.DisplayDialog("Error", "Please assign Character Target, Camera and Animation Clip.", "OK");
                     return;
                 }
-                string result = Bake(characterTarget, isoCamera, animationClip, framesPerDirection, textureResolution, outputDirectory, generateSpriteSheet);
+                string result = Bake(characterTarget, isoCamera, animationClip, framesPerDirection, textureResolution, outputDirectory, generateSpriteSheet, bakeAllDirections);
                 EditorUtility.DisplayDialog("Bake Finished", result, "OK");
             }
         }
 
-        public static string Bake(GameObject target, Camera cam, AnimationClip clip, int frameCount, int resolution, string outFolder, bool makeSheet)
+        public static string Bake(GameObject target, Camera cam, AnimationClip clip, int frameCount, int resolution, string outFolder, bool makeSheet, bool allDirections = true)
         {
             if (target == null || cam == null || clip == null) return "Missing inputs";
 
@@ -102,7 +108,8 @@ namespace IsometricTool.Editor
             Quaternion originalRotation = target.transform.rotation;
             Vector3 originalPosition = target.transform.position;
 
-            Texture2D[,] frames = new Texture2D[8, frameCount];
+            int dirCount = allDirections ? 8 : 1;
+            Texture2D[,] frames = new Texture2D[dirCount, frameCount];
             float clipLength = clip.length;
 
             PlayableGraph graph = PlayableGraph.Create("EditorBakeGraph");
@@ -113,7 +120,7 @@ namespace IsometricTool.Editor
 
             try
             {
-                for (int dir = 0; dir < 8; dir++)
+                for (int dir = 0; dir < dirCount; dir++)
                 {
                     string dirName = DirectionNames[dir];
                     float angle = DirectionAngles[dir];
@@ -161,15 +168,15 @@ namespace IsometricTool.Editor
                 if (makeSheet)
                 {
                     int sheetWidth = resolution * frameCount;
-                    int sheetHeight = resolution * 8;
+                    int sheetHeight = resolution * dirCount;
                     Texture2D sheet = new Texture2D(sheetWidth, sheetHeight, TextureFormat.ARGB32, false);
 
                     Color[] clearPixels = new Color[sheetWidth * sheetHeight];
                     sheet.SetPixels(clearPixels);
 
-                    for (int dir = 0; dir < 8; dir++)
+                    for (int dir = 0; dir < dirCount; dir++)
                     {
-                        int row = 7 - dir; // Row 0 is bottom in Unity Texture2D
+                        int row = (dirCount - 1) - dir; // Row 0 is bottom in Unity Texture2D
                         for (int f = 0; f < frameCount; f++)
                         {
                             Color[] fPixels = frames[dir, f].GetPixels();
@@ -178,7 +185,8 @@ namespace IsometricTool.Editor
                     }
                     sheet.Apply();
 
-                    string sheetPath = Path.Combine(clipFolder, $"{animName}_8Dir_SpriteSheet.png").Replace('\\', '/');
+                    string sheetName = allDirections ? $"{animName}_8Dir_SpriteSheet.png" : $"{animName}_Select_SpriteSheet.png";
+                    string sheetPath = Path.Combine(clipFolder, sheetName).Replace('\\', '/');
                     File.WriteAllBytes(sheetPath, sheet.EncodeToPNG());
                     DestroyImmediate(sheet);
                 }
@@ -191,7 +199,7 @@ namespace IsometricTool.Editor
                 target.transform.position = originalPosition;
                 DestroyImmediate(rt);
 
-                for (int d = 0; d < 8; d++)
+                for (int d = 0; d < dirCount; d++)
                 {
                     for (int f = 0; f < frameCount; f++)
                     {
