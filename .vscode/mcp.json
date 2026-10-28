@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "unity": {
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "anklebreaker-unity-mcp@latest"
+      ]
+    }
+  }
+}
